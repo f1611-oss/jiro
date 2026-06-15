@@ -306,6 +306,23 @@ label { display: block; margin-bottom: 7px; color: #d9d9dc; font-size: 13px; fon
 .photo-placeholder { display: grid; min-height: 220px; place-content: center; gap: 7px; color: var(--muted); text-align: center; }
 .camera-mark { color: var(--red); font-size: 38px; }
 .photo-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.photo-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 9px; }
+.photo-action { margin: 0; }
+.photo-action input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.photo-action span {
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+.photo-action:active span { border-color: var(--red); }
+.remove-photo { display: block; margin: 8px auto 0; }
+.remove-photo[hidden] { display: none; }
 
 .genre-options { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
 .genre-option input, .toggle input { position: absolute; opacity: 0; pointer-events: none; }

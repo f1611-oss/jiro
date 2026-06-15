@@ -21,7 +21,10 @@
         const error = await response.json();
         message = error.message || error.error_description || error.error || message;
       } catch {}
-      throw new Error(message);
+      const error = new Error(message);
+      error.status = response.status;
+      error.path = path;
+      throw error;
     }
     if (response.status === 204) return null;
     const text = await response.text();

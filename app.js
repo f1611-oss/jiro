@@ -19,6 +19,15 @@ const prefectures = [
   "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
   "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
 ];
+const DEFAULT_PHOTO = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+    <rect width="800" height="600" fill="#17171a"/>
+    <circle cx="400" cy="275" r="150" fill="#25252a"/>
+    <path d="M255 255h290l-25 116c-8 38-42 66-82 66h-76c-40 0-74-28-82-66z" fill="#38383e"/>
+    <path d="M310 210c-24 30 24 38 0 70M400 185c-24 30 24 38 0 70M490 210c-24 30 24 38 0 70" fill="none" stroke="#e51d2a" stroke-width="18" stroke-linecap="round"/>
+    <text x="400" y="510" text-anchor="middle" fill="#8e8e95" font-family="sans-serif" font-size="34" font-weight="700">NO PHOTO</text>
+  </svg>
+`)}`;
 
 const state = {
   page: "home",
@@ -167,6 +176,19 @@ function cloudBadge() {
   return `<span class="cloud-badge ${cloudActive() ? "online" : ""}">${cloudActive() ? "● 公開共有中" : "○ 未接続"}</span>`;
 }
 
+function cloudErrorMessage(error) {
+  const status = Number(error?.status || 0);
+  const message = String(error?.message || "");
+  const path = String(error?.path || "");
+  if (!navigator.onLine) return "インターネットに接続されていません";
+  if (status === 401 || status === 403) return "公開キーまたはSupabaseのアクセス権限を確認してください";
+  if (status === 404 && path.includes("/rest/v1/")) return "データベースがありません。Supabaseで最新版のSQLを実行してください";
+  if (status === 404 && path.includes("/storage/")) return "写真保存先がありません。Supabaseで最新版のSQLを実行してください";
+  if (message.includes("Failed to fetch") || message.includes("NetworkError")) return "API URLが正しいか確認してください";
+  if (message.includes("row-level security")) return "Supabaseの公開ポリシーが未設定です。最新版のSQLを再実行してください";
+  return `${message || "接続に失敗しました"}${status ? `（${status}）` : ""}`;
+}
+
 function navigate(page, options = {}) {
   state.page = page;
   if (options.id) state.detailId = options.id;
@@ -207,7 +229,7 @@ function recordCard(record, { ranking = false, index = 0, metric = "total" } = {
   const location = [record.prefecture || record.area, record.station].filter(Boolean).join("・");
   return `<article class="record-card ${ranking ? `ranking-card top-${index + 1}` : ""}" data-detail="${record.id}">
     ${ranking ? `<div class="rank-number">${index + 1}</div>` : ""}
-    <img class="record-thumb" src="${record.photo}" alt="${escapeHtml(record.shop)}のラーメン">
+    <img class="record-thumb" src="${record.photo || DEFAULT_PHOTO}" alt="${escapeHtml(record.shop)}のラーメン">
     <div class="record-main">
       <h3>${escapeHtml(record.shop)}</h3>
       <p>${escapeHtml(record.menu)}</p>
@@ -230,7 +252,7 @@ function homePage() {
   return `
     ${pageHeader("", "JIRO LOG", cloudBadge())}
     ${top ? `<section class="hero" data-detail="${top.id}">
-      <img src="${top.photo}" alt="${escapeHtml(top.shop)}のラーメン">
+      <img src="${top.photo || DEFAULT_PHOTO}" alt="${escapeHtml(top.shop)}のラーメン">
       <div class="hero-info">
         <div class="rank-crown">♛ 歴代ランキング 1位</div>
         <div class="hero-score">${totalScore(top.scores)}<small> 点</small></div>
@@ -238,7 +260,7 @@ function homePage() {
         <p class="hero-sub">${escapeHtml(top.menu)}</p>
       </div>
     </section>` : `<section class="hero hero-empty">
-      <div><div class="empty-mark">丼</div><h2>最初の一杯を記録しよう</h2><p class="muted">写真と5つの採点だけで、ランキングが始まります。</p></div>
+      <div><div class="empty-mark">丼</div><h2>最初の一杯を記録しよう</h2><p class="muted">5つの採点だけで、ランキングが始まります。写真は任意です。</p></div>
     </section>`}
     <div class="stats">
       <div class="stat"><strong>${state.records.length}</strong><span>記録した総杯数</span></div>
@@ -276,15 +298,20 @@ function addPage() {
     ${pageHeader(record ? "EDIT LOG" : "NEW LOG", record ? "記録を編集" : "一杯を記録")}
     <form id="record-form">
       <div class="field">
-        <label class="required">ラーメンの写真</label>
-        <label class="photo-picker">
-          <input id="photo-input" type="file" accept="image/*" capture="environment" ${record ? "" : "required"}>
+        <label>ラーメンの写真（任意）</label>
+        <div class="photo-picker">
           <div id="photo-preview">${defaults.photo
             ? `<img src="${defaults.photo}" alt="選択中の写真">`
-            : `<div class="photo-placeholder"><span class="camera-mark">◎</span><strong>写真を撮る・選ぶ</strong><small>タップしてカメラまたは写真ライブラリを開く</small></div>`}</div>
-        </label>
+            : `<div class="photo-placeholder"><span class="camera-mark">◎</span><strong>写真なしでも登録できます</strong><small>下のボタンから追加できます</small></div>`}</div>
+        </div>
+        <div class="photo-actions">
+          <label class="photo-action"><input id="camera-input" type="file" accept="image/*" capture="environment"><span>カメラで撮影</span></label>
+          <label class="photo-action"><input id="library-input" type="file" accept="image/*"><span>ライブラリから選ぶ</span></label>
+        </div>
+        <button class="text-button danger remove-photo" id="remove-photo-button" type="button" ${defaults.photo ? "" : "hidden"}>写真を外す</button>
       </div>
       <input type="hidden" id="photo-data" value="${defaults.photo}">
+      <input type="hidden" id="photo-path" value="${defaults.photoPath || ""}">
       <div class="field-grid">
         <div class="field"><label class="required" for="shop">店名</label><input id="shop" name="shop" value="${escapeHtml(defaults.shop)}" autocomplete="organization" required></div>
         <div class="field"><label class="required" for="menu">メニュー名</label><input id="menu" name="menu" value="${escapeHtml(defaults.menu)}" required></div>
@@ -441,7 +468,7 @@ function detailPage() {
   ].filter(Boolean);
   return `
     <header class="page-header"><button class="text-button" data-back>‹ 戻る</button><p class="eyebrow">DETAIL LOG</p><span></span></header>
-    <img class="detail-photo" src="${record.photo}" alt="${escapeHtml(record.shop)} ${escapeHtml(record.menu)}">
+    <img class="detail-photo" src="${record.photo || DEFAULT_PHOTO}" alt="${escapeHtml(record.shop)} ${escapeHtml(record.menu)}">
     <section class="detail-heading">
       <div class="score">${totalScore(record.scores)}<small>総合点</small></div>
       <h1>${escapeHtml(record.shop)}</h1>
@@ -532,7 +559,9 @@ function bindEvents() {
 
   const form = document.querySelector("#record-form");
   form?.addEventListener("submit", submitRecord);
-  document.querySelector("#photo-input")?.addEventListener("change", handlePhoto);
+  document.querySelector("#camera-input")?.addEventListener("change", handlePhoto);
+  document.querySelector("#library-input")?.addEventListener("change", handlePhoto);
+  document.querySelector("#remove-photo-button")?.addEventListener("click", removePhoto);
   scoreFields.forEach(([key]) => document.querySelector(`#score-${key}`)?.addEventListener("input", updateLiveScore));
 
   document.querySelector("#list-search")?.addEventListener("input", event => {
@@ -567,9 +596,19 @@ async function handlePhoto(event) {
     const compressed = await compressImage(file);
     document.querySelector("#photo-data").value = compressed;
     document.querySelector("#photo-preview").innerHTML = `<img src="${compressed}" alt="選択中の写真">`;
+    document.querySelector("#remove-photo-button").hidden = false;
   } catch {
     showToast("写真を読み込めませんでした");
   }
+}
+
+function removePhoto() {
+  document.querySelector("#photo-data").value = "";
+  document.querySelector("#photo-path").value = "";
+  document.querySelector("#photo-preview").innerHTML = `<div class="photo-placeholder"><span class="camera-mark">◎</span><strong>写真なしでも登録できます</strong><small>下のボタンから追加できます</small></div>`;
+  document.querySelector("#remove-photo-button").hidden = true;
+  document.querySelector("#camera-input").value = "";
+  document.querySelector("#library-input").value = "";
 }
 
 function compressImage(file) {
@@ -611,7 +650,6 @@ async function submitRecord(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const photo = document.querySelector("#photo-data").value;
-  if (!photo) return showToast("写真を選んでください");
   const shop = String(form.get("shop")).trim();
   const menu = String(form.get("menu")).trim();
   const duplicate = state.records.find(record =>
@@ -630,6 +668,7 @@ async function submitRecord(event) {
   const record = {
     id: state.editingId || crypto.randomUUID(),
     photo, shop, menu,
+    photoPath: document.querySelector("#photo-path").value || null,
     date: String(form.get("date")),
     genre: String(form.get("genre")),
     scores: currentScores(),
@@ -646,7 +685,7 @@ async function submitRecord(event) {
     try {
       Object.assign(record, await window.JiroCloud.saveRecord(record));
     } catch (error) {
-      showToast(`同期できませんでした：${error.message}`);
+      showToast(`同期できませんでした：${cloudErrorMessage(error)}`);
       return;
     }
   }
@@ -698,7 +737,7 @@ async function submitWishlist(event) {
     try {
       await window.JiroCloud.saveWishlist(shop);
     } catch (error) {
-      showToast(`同期できませんでした：${error.message}`);
+      showToast(`同期できませんでした：${cloudErrorMessage(error)}`);
       return;
     }
   }
@@ -739,7 +778,7 @@ async function deleteWishlist(event) {
     try {
       await window.JiroCloud.deleteWishlist(id);
     } catch (error) {
-      showToast(`削除を同期できませんでした：${error.message}`);
+      showToast(`削除を同期できませんでした：${cloudErrorMessage(error)}`);
       return;
     }
   }
@@ -757,7 +796,7 @@ async function deleteRecord(event) {
     try {
       await window.JiroCloud.deleteRecord(target);
     } catch (error) {
-      showToast(`削除を同期できませんでした：${error.message}`);
+      showToast(`削除を同期できませんでした：${cloudErrorMessage(error)}`);
       return;
     }
   }
@@ -869,7 +908,7 @@ async function syncFromCloud(notify = true) {
     await Promise.all([saveRecords(), saveWishlist()]);
     if (notify) showToast("最新データに同期しました");
   } catch (error) {
-    showToast(`同期できませんでした：${error.message}`);
+    showToast(`同期できませんでした：${cloudErrorMessage(error)}`);
   } finally {
     state.syncing = false;
     render();
@@ -894,7 +933,7 @@ async function uploadLocalToCloud(confirmFirst = true) {
     await Promise.all([saveRecords(), saveWishlist()]);
     showToast("端末データをクラウドへ移行しました");
   } catch (error) {
-    showToast(`移行できませんでした：${error.message}`);
+    showToast(`移行できませんでした：${cloudErrorMessage(error)}`);
   } finally {
     state.syncing = false;
     render();

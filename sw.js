@@ -1,4 +1,4 @@
-const CACHE = "jiro-log-v5";
+const CACHE = "jiro-log-v6";
 const ASSETS = ["./", "./index.html", "./styles.css", "./cloud-config.js", "./cloud.js", "./app.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
 
 self.addEventListener("install", event => {
